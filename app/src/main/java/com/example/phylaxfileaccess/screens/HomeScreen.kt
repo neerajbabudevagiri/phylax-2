@@ -78,6 +78,7 @@ fun HomeScreen() {
     var selectedFile by remember { mutableStateOf<FileItem?>(null) }
     var showSharingApps by remember { mutableStateOf(false) }
     var shareControlFile by remember { mutableStateOf<FileItem?>(null) }
+    var fileToShare by remember { mutableStateOf<FileItem?>(null) }
 
     val viewModel: FileViewModel = viewModel(
         factory = FileViewModelFactory(context)
@@ -116,17 +117,26 @@ fun HomeScreen() {
         return
     }
 
-    if (selectedFile != null) {
-        FilePreviewScreen(
-            file = selectedFile!!,
-            onBack = { selectedFile = null }
+    if (fileToShare != null) {
+        SharingAppsScreen(
+            fileItem = fileToShare,
+            onBack = { fileToShare = null }
         )
         return
     }
 
     if (showSharingApps) {
         SharingAppsScreen(
+            fileItem = null,
             onBack = { showSharingApps = false }
+        )
+        return
+    }
+
+    if (selectedFile != null) {
+        FilePreviewScreen(
+            file = selectedFile!!,
+            onBack = { selectedFile = null }
         )
         return
     }
@@ -140,6 +150,9 @@ fun HomeScreen() {
             },
             onEditClick = { file ->
                 shareControlFile = file
+            },
+            onShareClick = { file ->
+                fileToShare = file
             }
         )
         return
@@ -308,15 +321,19 @@ fun HomeScreen() {
 
                     item(span = { GridItemSpan(maxLineSpan) }) {
                         StaggeredEntrance(index = categories.size + 2, isLaunched = isLaunched) {
-                            SectionHeader("Files") {}
+                            SectionHeader("Recent Files") {}
                         }
                     }
 
-                    itemsIndexed(files) { index, file ->
+                    itemsIndexed(
+                        items = files,
+                        span = { _, _ -> GridItemSpan(maxLineSpan) }
+                    ) { index, file ->
                         MorphingStaggeredEntrance(index = index + categories.size + 3, isLaunched = isLaunched) {
                             RecentFileListItem(
                                 file = file, 
-                                onEditClick = { shareControlFile = it }
+                                onEditClick = { shareControlFile = it },
+                                onShareClick = { fileToShare = it }
                             )
                         }
                     }
@@ -718,7 +735,7 @@ fun CategoryCard(category: CategoryData, onClick: () -> Unit) {
 }
 
 @Composable
-fun RecentFileListItem(file: FileItem, onEditClick: (FileItem) -> Unit) {
+fun RecentFileListItem(file: FileItem, onEditClick: (FileItem) -> Unit, onShareClick: (FileItem) -> Unit) {
     val context = LocalContext.current
     Surface(
         color = PhylaxCardBg,
@@ -764,7 +781,6 @@ fun RecentFileListItem(file: FileItem, onEditClick: (FileItem) -> Unit) {
                     )
                 }
 
-                @Suppress("DEPRECATION")
                 Spacer(modifier = Modifier.width(12.dp))
 
                 Column(modifier = Modifier.weight(1f)) {
@@ -792,6 +808,15 @@ fun RecentFileListItem(file: FileItem, onEditClick: (FileItem) -> Unit) {
                 )
             }
             
+            IconButton(onClick = { onShareClick(file) }) {
+                Icon(
+                    imageVector = Icons.Default.Share,
+                    contentDescription = "Share",
+                    tint = PhylaxGreen,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+
             IconButton(onClick = { onEditClick(file) }) {
                 Icon(
                     imageVector = Icons.Default.Edit,

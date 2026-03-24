@@ -1,8 +1,11 @@
 package com.example.phylaxfileaccess.screens
 
+import android.content.Context
 import android.content.Intent
 import android.content.pm.ResolveInfo
 import android.graphics.drawable.Drawable
+import android.net.Uri
+import android.webkit.MimeTypeMap
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -22,25 +25,34 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.FileProvider
 import androidx.core.graphics.drawable.toBitmap
-
-data class SharingAppInfo(
-    val name: String,
-    val icon: Drawable,
-    val packageName: String,
-    val activityName: String
-)
+import com.example.phylaxfileaccess.models.FileItem
+import com.example.phylaxfileaccess.models.SharingAppInfo
+import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SharingAppsScreen(onBack: () -> Unit) {
+fun SharingAppsScreen(fileItem: FileItem?, onBack: () -> Unit) {
     val context = LocalContext.current
     val packageManager = context.packageManager
     
-    val sharingApps = remember {
+    // Load allowed apps from SharedPreferences if fileItem is present
+    val allowedAppPackages = remember(fileItem) {
+        if (fileItem != null) {
+            val prefs = context.getSharedPreferences("phylax_prefs", Context.MODE_PRIVATE)
+            // Use null as default to distinguish between "never configured" and "empty selection"
+            prefs.getStringSet("allowed_apps_${fileItem.path}", null)
+        } else {
+            null
+        }
+    }
+
+    val sharingApps = remember(allowedAppPackages) {
         val intent = Intent(Intent.ACTION_SEND).apply {
             type = "*/*"
         }
@@ -52,7 +64,17 @@ fun SharingAppsScreen(onBack: () -> Unit) {
                 packageName = info.activityInfo.packageName,
                 activityName = info.activityInfo.name
             )
-        }.sortedBy { it.name }
+        }
+        .filter { app ->
+            // If user has configured Share Control (allowedAppPackages is not null),
+            // strictly only show apps in that list.
+            if (allowedAppPackages != null) {
+                allowedAppPackages.contains(app.packageName)
+            } else {
+                true // Never configured, show all apps
+            }
+        }
+        .sortedBy { it.name }
     }
 
     Scaffold(
@@ -60,7 +82,7 @@ fun SharingAppsScreen(onBack: () -> Unit) {
             CenterAlignedTopAppBar(
                 title = {
                     Text(
-                        "SHARING APPS",
+                        "PHYLAX SHARING",
                         color = PhylaxGreen,
                         fontWeight = FontWeight.ExtraBold,
                         letterSpacing = 2.sp,
@@ -88,32 +110,87 @@ fun SharingAppsScreen(onBack: () -> Unit) {
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            Text(
-                text = "Select an app to share files with external environments",
-                color = PhylaxGray,
-                fontSize = 14.sp,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)
-            )
+            if (fileItem != null) {
+                Column(modifier = Modifier.padding(20.dp)) {
+                    Text(
+                        "Sharing File:",
+                        color = PhylaxGray,
+                        fontSize = 12.sp
+                    )
+                    Text(
+                        text = fileItem.name,
+                        color = Color.White,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    if (allowedAppPackages != null) {
+                        Text(
+                            text = "Filtered by Share Control",
+                            color = PhylaxGreen,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                    HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
+                }
+            }
 
             if (sharingApps.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("No sharing apps found", color = Color.White)
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.padding(32.dp)
+                    ) {
+                        Text(
+                            text = if (allowedAppPackages != null) 
+                                "Sharing restricted for this file.\nNo apps are currently allowed." 
+                                else "No apps found capable of sharing files.",
+                            color = PhylaxGray,
+                            textAlign = TextAlign.Center,
+                            fontSize = 14.sp
+                        )
+                        if (allowedAppPackages != null) {
+                            Spacer(modifier = Modifier.height(16.dp))
+                            TextButton(onClick = onBack) {
+                                Text("Update Share Control", color = PhylaxGreen)
+                            }
+                        }
+                    }
                 }
             } else {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     items(sharingApps) { app ->
                         SharingAppListItem(app = app) {
-                            // Test sharing capability with a text intent
-                            val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                                type = "text/plain"
-                                putExtra(Intent.EXTRA_TEXT, "Shared from Phylax File Access")
-                                setClassName(app.packageName, app.activityName)
+                            if (fileItem != null) {
+                                try {
+                                    val file = File(fileItem.path)
+                                    val uri: Uri = FileProvider.getUriForFile(
+                                        context,
+                                        "${context.packageName}.fileprovider",
+                                        file
+                                    )
+                                    
+                                    val mimeType = MimeTypeMap.getSingleton().getMimeTypeFromExtension(fileItem.extension.lowercase()) ?: "*/*"
+                                    
+                                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                        type = mimeType
+                                        putExtra(Intent.EXTRA_STREAM, uri)
+                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                        setClassName(app.packageName, app.activityName)
+                                    }
+                                    context.startActivity(shareIntent)
+                                } catch (e: Exception) {
+                                    e.printStackTrace()
+                                }
                             }
-                            context.startActivity(shareIntent)
                         }
                     }
                 }

@@ -1,7 +1,9 @@
 package com.example.phylaxfileaccess.screens
 
+import android.content.Context
 import android.content.Intent
 import android.content.pm.ResolveInfo
+import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -11,6 +13,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -48,7 +51,16 @@ fun ShareControlScreen(file: FileItem, onBack: () -> Unit) {
         }.sortedBy { it.name }
     }
 
-    val allowedApps = remember { mutableStateMapOf<String, Boolean>() }
+    // Load initial state from SharedPreferences
+    val prefs = remember { context.getSharedPreferences("phylax_prefs", Context.MODE_PRIVATE) }
+    val allowedApps = remember { 
+        val saved = prefs.getStringSet("allowed_apps_${file.path}", emptySet()) ?: emptySet()
+        val map = mutableStateMapOf<String, Boolean>()
+        sharingApps.forEach { app ->
+            map[app.packageName] = saved.contains(app.packageName)
+        }
+        map
+    }
 
     Scaffold(
         topBar = {
@@ -75,6 +87,37 @@ fun ShareControlScreen(file: FileItem, onBack: () -> Unit) {
                     containerColor = PhylaxBlack
                 )
             )
+        },
+        bottomBar = {
+            Surface(
+                color = PhylaxBlack,
+                tonalElevation = 8.dp,
+                shadowElevation = 16.dp
+            ) {
+                Button(
+                    onClick = {
+                        val selectedPackages = allowedApps.filter { it.value }.keys.toSet()
+                        prefs.edit().putStringSet("allowed_apps_${file.path}", selectedPackages).apply()
+                        Toast.makeText(context, "Sharing restrictions saved for ${file.name}", Toast.LENGTH_SHORT).show()
+                        onBack()
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(20.dp)
+                        .height(56.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2196F3)),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Icon(Icons.Default.Lock, contentDescription = null, tint = Color.White)
+                    Spacer(Modifier.width(12.dp))
+                    Text(
+                        "LOCK ACCESS",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp
+                    )
+                }
+            }
         },
         containerColor = PhylaxBlack
     ) { padding ->
@@ -111,7 +154,7 @@ fun ShareControlScreen(file: FileItem, onBack: () -> Unit) {
 
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 items(sharingApps) { app ->
@@ -144,6 +187,7 @@ fun ShareControlScreen(file: FileItem, onBack: () -> Unit) {
 
                             Spacer(modifier = Modifier.width(16.dp))
 
+                            @Suppress("DEPRECATION")
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     text = app.name,
