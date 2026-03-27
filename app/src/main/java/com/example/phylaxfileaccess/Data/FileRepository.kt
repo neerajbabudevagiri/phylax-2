@@ -4,10 +4,16 @@ import android.content.Context
 import android.os.Environment
 import android.os.StatFs
 import android.provider.MediaStore
+import com.example.phylaxfileaccess.models.FileActivityEvent
 import com.example.phylaxfileaccess.models.FileItem
 import com.example.phylaxfileaccess.models.StorageInfo
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
+import java.util.UUID
 
 class FileRepository(private val context: Context) {
+    private val prefs = context.getSharedPreferences("phylax_activity_prefs", Context.MODE_PRIVATE)
+    private val gson = Gson()
 
     fun getRecentFiles(): List<FileItem> {
         val files = mutableListOf<FileItem>()
@@ -130,5 +136,17 @@ class FileRepository(private val context: Context) {
             usedSpace = used,
             freeSpace = free
         )
+    }
+
+    fun logActivityEvent(event: FileActivityEvent) {
+        val events = getActivityEvents(event.filePath).toMutableList()
+        events.add(event)
+        prefs.edit().putString(event.filePath, gson.toJson(events)).apply()
+    }
+
+    fun getActivityEvents(filePath: String): List<FileActivityEvent> {
+        val json = prefs.getString(filePath, null) ?: return emptyList()
+        val type = object : TypeToken<List<FileActivityEvent>>() {}.type
+        return gson.fromJson(json, type)
     }
 }

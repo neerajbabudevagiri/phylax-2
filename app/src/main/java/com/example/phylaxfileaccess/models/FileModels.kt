@@ -22,3 +22,12 @@ data class SharingAppInfo(
     val packageName: String,
     val activityName: String
 )
+
+data class FileActivityEvent(
+    val id: String,
+    val filePath: String,
+    val timestamp: Long,
+    val eventType: String, // "OPEN_SHARE", "FILE_SHARED"
+    val targetApp: String? = null,
+    val targetPackage: String? = null
+)

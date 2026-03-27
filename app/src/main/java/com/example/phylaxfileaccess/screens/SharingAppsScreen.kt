@@ -31,16 +31,36 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import androidx.core.graphics.drawable.toBitmap
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.phylaxfileaccess.models.FileActivityEvent
 import com.example.phylaxfileaccess.models.FileItem
 import com.example.phylaxfileaccess.models.SharingAppInfo
+import com.example.phylaxfileaccess.viewmodel.FileViewModel
+import com.example.phylaxfileaccess.viewmodel.FileViewModelFactory
 import java.io.File
+import java.util.UUID
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SharingAppsScreen(fileItem: FileItem?, onBack: () -> Unit) {
     val context = LocalContext.current
     val packageManager = context.packageManager
+    val viewModel: FileViewModel = viewModel(factory = FileViewModelFactory(context))
     
+    // Log "OPEN_SHARE" when the screen is opened with a file
+    LaunchedEffect(fileItem) {
+        if (fileItem != null) {
+            viewModel.logActivity(
+                FileActivityEvent(
+                    id = UUID.randomUUID().toString(),
+                    filePath = fileItem.path,
+                    timestamp = System.currentTimeMillis(),
+                    eventType = "OPEN_SHARE"
+                )
+            )
+        }
+    }
+
     // Load BLOCKED apps from SharedPreferences
     val blockedAppPackages = remember(fileItem) {
         if (fileItem != null) {
@@ -65,7 +85,6 @@ fun SharingAppsScreen(fileItem: FileItem?, onBack: () -> Unit) {
             )
         }
         .filter { app ->
-            // INVERTED LOGIC: Exclude apps that are in the blocked list
             !blockedAppPackages.contains(app.packageName)
         }
         .sortedBy { it.name }
@@ -122,7 +141,7 @@ fun SharingAppsScreen(fileItem: FileItem?, onBack: () -> Unit) {
                     if (blockedAppPackages.isNotEmpty()) {
                         Text(
                             text = "Some apps are restricted by Phylax Control",
-                            color = Color(0xFFD32F2F), // Red for restriction
+                            color = Color(0xFFD32F2F),
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Medium,
                             modifier = Modifier.padding(top = 4.dp)
@@ -161,6 +180,18 @@ fun SharingAppsScreen(fileItem: FileItem?, onBack: () -> Unit) {
                         SharingAppListItem(app = app) {
                             if (fileItem != null) {
                                 try {
+                                    // Log "FILE_SHARED" when an app is selected
+                                    viewModel.logActivity(
+                                        FileActivityEvent(
+                                            id = UUID.randomUUID().toString(),
+                                            filePath = fileItem.path,
+                                            timestamp = System.currentTimeMillis(),
+                                            eventType = "FILE_SHARED",
+                                            targetApp = app.name,
+                                            targetPackage = app.packageName
+                                        )
+                                    )
+
                                     val file = File(fileItem.path)
                                     val uri: Uri = FileProvider.getUriForFile(
                                         context,

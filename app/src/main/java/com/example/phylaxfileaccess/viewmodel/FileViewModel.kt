@@ -3,6 +3,7 @@ package com.example.phylaxfileaccess.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.phylaxfileaccess.data.FileRepository
+import com.example.phylaxfileaccess.models.FileActivityEvent
 import com.example.phylaxfileaccess.models.FileItem
 import com.example.phylaxfileaccess.models.StorageInfo
 import kotlinx.coroutines.Dispatchers
@@ -22,6 +23,9 @@ class FileViewModel(private val repository: FileRepository) : ViewModel() {
     private val _storage = MutableStateFlow<StorageInfo?>(null)
     val storage: StateFlow<StorageInfo?> = _storage.asStateFlow()
 
+    private val _activityEvents = MutableStateFlow<List<FileActivityEvent>>(emptyList())
+    val activityEvents: StateFlow<List<FileActivityEvent>> = _activityEvents.asStateFlow()
+
     fun loadFiles() {
         viewModelScope.launch(Dispatchers.IO) {
             _recentFiles.value = repository.getRecentFiles()
@@ -37,6 +41,18 @@ class FileViewModel(private val repository: FileRepository) : ViewModel() {
     fun loadStorage() {
         viewModelScope.launch(Dispatchers.IO) {
             _storage.value = repository.getStorageInfo()
+        }
+    }
+
+    fun logActivity(event: FileActivityEvent) {
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.logActivityEvent(event)
+        }
+    }
+
+    fun loadActivityEvents(filePath: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            _activityEvents.value = repository.getActivityEvents(filePath)
         }
     }
 }
