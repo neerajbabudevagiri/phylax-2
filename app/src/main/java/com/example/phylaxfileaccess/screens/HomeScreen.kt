@@ -79,6 +79,7 @@ fun HomeScreen() {
     var showSharingApps by remember { mutableStateOf(false) }
     var shareControlFile by remember { mutableStateOf<FileItem?>(null) }
     var fileToShare by remember { mutableStateOf<FileItem?>(null) }
+    var selectedActivityFile by remember { mutableStateOf<FileItem?>(null) }
 
     val viewModel: FileViewModel = viewModel(
         factory = FileViewModelFactory(context)
@@ -109,6 +110,14 @@ fun HomeScreen() {
     // Permanent scrollbar alpha
     val scrollbarAlpha = 0.4f
 
+    if (selectedActivityFile != null) {
+        ActivityScreen(
+            file = selectedActivityFile!!,
+            onBack = { selectedActivityFile = null }
+        )
+        return
+    }
+
     if (shareControlFile != null) {
         ShareControlScreen(
             file = shareControlFile!!,
@@ -125,18 +134,18 @@ fun HomeScreen() {
         return
     }
 
-    if (showSharingApps) {
-        SharingAppsScreen(
-            fileItem = null,
-            onBack = { showSharingApps = false }
-        )
-        return
-    }
-
     if (selectedFile != null) {
         FilePreviewScreen(
             file = selectedFile!!,
             onBack = { selectedFile = null }
+        )
+        return
+    }
+
+    if (showSharingApps) {
+        SharingAppsScreen(
+            fileItem = null,
+            onBack = { showSharingApps = false }
         )
         return
     }
@@ -153,6 +162,9 @@ fun HomeScreen() {
             },
             onShareClick = { file ->
                 fileToShare = file
+            },
+            onActivityClick = { file ->
+                selectedActivityFile = file
             }
         )
         return
@@ -205,7 +217,6 @@ fun HomeScreen() {
 
                     NavigationItem("Dashboard", Icons.Default.Dashboard, true) { scope.launch { drawerState.close() } }
                     
-                    // Permission Section in Navbar - Updated with robust previous logic
                     NavigationItem("File Permissions", Icons.Default.GppGood, false) {
                         scope.launch {
                             drawerState.close()
@@ -333,7 +344,8 @@ fun HomeScreen() {
                             RecentFileListItem(
                                 file = file, 
                                 onEditClick = { shareControlFile = it },
-                                onShareClick = { fileToShare = it }
+                                onShareClick = { fileToShare = it },
+                                onActivityClick = { selectedActivityFile = it }
                             )
                         }
                     }
@@ -673,8 +685,8 @@ fun CategoryCard(category: CategoryData, onClick: () -> Unit) {
         modifier = Modifier
             .aspectRatio(0.9f)
             .shadow(8.dp, SquaricleShape)
-            .border(0.5.dp, Color.White.copy(0.05f), SquaricleShape)
-            .clickable { onClick() },
+            .clickable { onClick() }
+            .border(0.5.dp, Color.White.copy(0.05f), SquaricleShape),
         colors = CardDefaults.cardColors(containerColor = PhylaxCardBg),
         shape = SquaricleShape
     ) {
@@ -735,7 +747,12 @@ fun CategoryCard(category: CategoryData, onClick: () -> Unit) {
 }
 
 @Composable
-fun RecentFileListItem(file: FileItem, onEditClick: (FileItem) -> Unit, onShareClick: (FileItem) -> Unit) {
+fun RecentFileListItem(
+    file: FileItem, 
+    onEditClick: (FileItem) -> Unit, 
+    onShareClick: (FileItem) -> Unit,
+    onActivityClick: (FileItem) -> Unit
+) {
     val context = LocalContext.current
     Surface(
         color = PhylaxCardBg,
@@ -812,6 +829,15 @@ fun RecentFileListItem(file: FileItem, onEditClick: (FileItem) -> Unit, onShareC
                 Icon(
                     imageVector = Icons.Default.Share,
                     contentDescription = "Share",
+                    tint = PhylaxGreen,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+
+            IconButton(onClick = { onActivityClick(file) }) {
+                Icon(
+                    imageVector = Icons.Default.History,
+                    contentDescription = "Activity",
                     tint = PhylaxGreen,
                     modifier = Modifier.size(18.dp)
                 )

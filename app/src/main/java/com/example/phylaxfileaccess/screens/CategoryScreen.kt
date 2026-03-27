@@ -10,6 +10,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -36,7 +37,8 @@ fun CategoryScreen(
     onBack: () -> Unit,
     onFileClick: (FileItem) -> Unit,
     onEditClick: (FileItem) -> Unit,
-    onShareClick: (FileItem) -> Unit
+    onShareClick: (FileItem) -> Unit,
+    onActivityClick: (FileItem) -> Unit
 ) {
     val context = LocalContext.current
     val viewModel: FileViewModel = viewModel(
@@ -99,7 +101,8 @@ fun CategoryScreen(
                         file = file, 
                         onClick = { onFileClick(file) },
                         onEditClick = { onEditClick(file) },
-                        onShareClick = { onShareClick(file) }
+                        onShareClick = { onShareClick(file) },
+                        onActivityClick = { onActivityClick(file) }
                     )
                 }
             }
@@ -108,7 +111,13 @@ fun CategoryScreen(
 }
 
 @Composable
-fun CategoryFileItem(file: FileItem, onClick: () -> Unit, onEditClick: () -> Unit, onShareClick: () -> Unit) {
+fun CategoryFileItem(
+    file: FileItem, 
+    onClick: () -> Unit, 
+    onEditClick: () -> Unit, 
+    onShareClick: () -> Unit,
+    onActivityClick: () -> Unit
+) {
     Surface(
         color = PhylaxCardBg,
         shape = RoundedCornerShape(16.dp),
@@ -142,7 +151,6 @@ fun CategoryFileItem(file: FileItem, onClick: () -> Unit, onEditClick: () -> Uni
                     )
                 }
 
-                @Suppress("DEPRECATION")
                 Spacer(modifier = Modifier.width(16.dp))
 
                 Column(modifier = Modifier.weight(1f)) {
@@ -172,6 +180,15 @@ fun CategoryFileItem(file: FileItem, onClick: () -> Unit, onEditClick: () -> Uni
                 Icon(
                     imageVector = Icons.Default.Share,
                     contentDescription = "Share",
+                    tint = PhylaxGreen,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+
+            IconButton(onClick = onActivityClick) {
+                Icon(
+                    imageVector = Icons.Default.History,
+                    contentDescription = "Activity",
                     tint = PhylaxGreen,
                     modifier = Modifier.size(20.dp)
                 )

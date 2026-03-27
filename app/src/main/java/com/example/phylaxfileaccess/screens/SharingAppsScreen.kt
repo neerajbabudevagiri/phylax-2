@@ -41,18 +41,17 @@ fun SharingAppsScreen(fileItem: FileItem?, onBack: () -> Unit) {
     val context = LocalContext.current
     val packageManager = context.packageManager
     
-    // Load allowed apps from SharedPreferences if fileItem is present
-    val allowedAppPackages = remember(fileItem) {
+    // Load BLOCKED apps from SharedPreferences
+    val blockedAppPackages = remember(fileItem) {
         if (fileItem != null) {
             val prefs = context.getSharedPreferences("phylax_prefs", Context.MODE_PRIVATE)
-            // Use null as default to distinguish between "never configured" and "empty selection"
-            prefs.getStringSet("allowed_apps_${fileItem.path}", null)
+            prefs.getStringSet("blocked_apps_${fileItem.path}", emptySet()) ?: emptySet()
         } else {
-            null
+            emptySet()
         }
     }
 
-    val sharingApps = remember(allowedAppPackages) {
+    val sharingApps = remember(blockedAppPackages) {
         val intent = Intent(Intent.ACTION_SEND).apply {
             type = "*/*"
         }
@@ -66,13 +65,8 @@ fun SharingAppsScreen(fileItem: FileItem?, onBack: () -> Unit) {
             )
         }
         .filter { app ->
-            // If user has configured Share Control (allowedAppPackages is not null),
-            // strictly only show apps in that list.
-            if (allowedAppPackages != null) {
-                allowedAppPackages.contains(app.packageName)
-            } else {
-                true // Never configured, show all apps
-            }
+            // INVERTED LOGIC: Exclude apps that are in the blocked list
+            !blockedAppPackages.contains(app.packageName)
         }
         .sortedBy { it.name }
     }
@@ -125,10 +119,10 @@ fun SharingAppsScreen(fileItem: FileItem?, onBack: () -> Unit) {
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
-                    if (allowedAppPackages != null) {
+                    if (blockedAppPackages.isNotEmpty()) {
                         Text(
-                            text = "Filtered by Share Control",
-                            color = PhylaxGreen,
+                            text = "Some apps are restricted by Phylax Control",
+                            color = Color(0xFFD32F2F), // Red for restriction
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Medium,
                             modifier = Modifier.padding(top = 4.dp)
@@ -146,18 +140,14 @@ fun SharingAppsScreen(fileItem: FileItem?, onBack: () -> Unit) {
                         modifier = Modifier.padding(32.dp)
                     ) {
                         Text(
-                            text = if (allowedAppPackages != null) 
-                                "Sharing restricted for this file.\nNo apps are currently allowed." 
-                                else "No apps found capable of sharing files.",
+                            text = "No available apps for sharing.\nRestrictions may be active.",
                             color = PhylaxGray,
                             textAlign = TextAlign.Center,
                             fontSize = 14.sp
                         )
-                        if (allowedAppPackages != null) {
-                            Spacer(modifier = Modifier.height(16.dp))
-                            TextButton(onClick = onBack) {
-                                Text("Update Share Control", color = PhylaxGreen)
-                            }
+                        Spacer(modifier = Modifier.height(16.dp))
+                        TextButton(onClick = onBack) {
+                            Text("Adjust Share Control", color = PhylaxGreen)
                         }
                     }
                 }
