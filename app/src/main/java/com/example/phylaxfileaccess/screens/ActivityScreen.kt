@@ -36,6 +36,7 @@ import com.example.phylaxfileaccess.viewmodel.FileViewModel
 import com.example.phylaxfileaccess.viewmodel.FileViewModelFactory
 import java.text.SimpleDateFormat
 import java.util.*
+import androidx.compose.ui.graphics.nativeCanvas
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -172,7 +173,7 @@ fun ShareActivityChart(events: List<FileActivityEvent>) {
         shape = RoundedCornerShape(16.dp),
         modifier = Modifier
             .fillMaxWidth()
-            .height(200.dp)
+            .height(280.dp)
             .padding(horizontal = 16.dp),
         border = BorderStroke(1.dp, Color.White.copy(alpha = 0.05f))
     ) {
@@ -187,92 +188,114 @@ fun ShareActivityChart(events: List<FileActivityEvent>) {
             
             Spacer(modifier = Modifier.height(16.dp))
             
-            Canvas(modifier = Modifier.fillMaxSize()) {
+            // Group events by hour to show "Pace" accurately
+            val calendar = Calendar.getInstance()
+            val hourGroups = events.groupBy { event ->
+                calendar.timeInMillis = event.timestamp
+                calendar.set(Calendar.MINUTE, 0)
+                calendar.set(Calendar.SECOND, 0)
+                calendar.set(Calendar.MILLISECOND, 0)
+                calendar.timeInMillis
+            }.toSortedMap()
+
+            val chartData = hourGroups.map { (time, hourlyEvents) ->
+                val sharedCount = hourlyEvents.count { it.eventType == "FILE_SHARED" }
+                val initiatedCount = hourlyEvents.count { it.eventType == "OPEN_SHARE" }
+                Triple(time, sharedCount, initiatedCount)
+            }
+
+            Canvas(modifier = Modifier.fillMaxSize().padding(bottom = 40.dp, start = 30.dp)) {
                 val width = size.width
                 val height = size.height
                 
-                // Draw Grid lines
-                val gridLines = 4
-                for (i in 0..gridLines) {
-                    val y = height * (i.toFloat() / gridLines)
+                val maxCount = chartData.maxOfOrNull { it.second.coerceAtLeast(it.third) }?.coerceAtLeast(1) ?: 1
+                
+                // Draw Y-Axis Grid & Labels
+                val ySteps = 4
+                for (i in 0..ySteps) {
+                    val y = height - (height * (i.toFloat() / ySteps))
                     drawLine(
                         color = Color.White.copy(alpha = 0.05f),
                         start = Offset(0f, y),
                         end = Offset(width, y),
                         strokeWidth = 1.dp.toPx()
                     )
+                    
+                    drawContext.canvas.nativeCanvas.drawText(
+                        "${(maxCount * i) / ySteps}",
+                        -25f,
+                        y + 10f,
+                        android.graphics.Paint().apply {
+                            color = android.graphics.Color.GRAY
+                            textSize = 20f
+                        }
+                    )
                 }
 
-                if (events.size < 2) {
-                    // Draw a single point if only one event
-                    val event = events.firstOrNull()
-                    if (event != null) {
-                        val y = if (event.eventType == "FILE_SHARED") height * 0.2f else height * 0.8f
-                        drawCircle(
-                            color = if (event.eventType == "FILE_SHARED") PhylaxGreen else Color.Yellow,
-                            radius = 6.dp.toPx() * animationProgress.value,
-                            center = Offset(width / 2, y)
+                if (chartData.isEmpty()) return@Canvas
+
+                val spacing = width / (chartData.size.coerceAtLeast(2) - 1).coerceAtLeast(1)
+                
+                // Paths for Shared (Green) and Initiated (Yellow)
+                val sharedPath = Path()
+                val initiatedPath = Path()
+                
+                chartData.forEachIndexed { index, (_, shared, initiated) ->
+                    val x = index * spacing
+                    val yShared = height - (height * (shared.toFloat() / maxCount)) * animationProgress.value
+                    val yInitiated = height - (height * (initiated.toFloat() / maxCount)) * animationProgress.value
+                    
+                    if (index == 0) {
+                        sharedPath.moveTo(x, yShared)
+                        initiatedPath.moveTo(x, yInitiated)
+                    } else {
+                        sharedPath.lineTo(x, yShared)
+                        initiatedPath.lineTo(x, yInitiated)
+                    }
+
+                    // Draw time labels on X-Axis
+                    if (index % ((chartData.size / 4).coerceAtLeast(1)) == 0 || index == chartData.size - 1) {
+                        val timeStr = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(chartData[index].first))
+                        drawContext.canvas.nativeCanvas.drawText(
+                            timeStr,
+                            x - 25f,
+                            height + 35f,
+                            android.graphics.Paint().apply {
+                                color = android.graphics.Color.WHITE
+                                alpha = (150 * animationProgress.value).toInt()
+                                textSize = 22f
+                            }
                         )
                     }
-                    return@Canvas
                 }
 
-                val spacing = width / (events.size - 1)
-                val points = events.mapIndexed { index, event ->
-                    val x = index * spacing
-                    val y = if (event.eventType == "FILE_SHARED") height * 0.2f else height * 0.8f
-                    Offset(x, y)
-                }
-
-                // Draw Area Gradient
-                val fillPath = Path().apply {
-                    moveTo(0f, height)
-                    points.forEach { moveTo ->
-                        lineTo(moveTo.x, height - (height - moveTo.y) * animationProgress.value)
-                    }
-                    lineTo(width, height)
-                    close()
-                }
-                
+                // Draw Shared Line (Green)
                 drawPath(
-                    path = fillPath,
-                    brush = Brush.verticalGradient(
-                        colors = listOf(PhylaxGreen.copy(alpha = 0.15f * animationProgress.value), Color.Transparent)
-                    )
-                )
-
-                // Draw Smooth Line
-                val linePath = Path().apply {
-                    points.forEachIndexed { index, point ->
-                        val animatedY = height - (height - point.y) * animationProgress.value
-                        if (index == 0) moveTo(point.x, animatedY)
-                        else lineTo(point.x, animatedY)
-                    }
-                }
-
-                drawPath(
-                    path = linePath,
-                    color = PhylaxGreen.copy(alpha = 0.6f * animationProgress.value),
+                    path = sharedPath,
+                    color = PhylaxGreen.copy(alpha = 0.8f),
                     style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
                 )
 
-                // Draw Data Points
-                points.forEachIndexed { index, point ->
-                    val event = events[index]
-                    val animatedY = height - (height - point.y) * animationProgress.value
-                    
-                    drawCircle(
-                        color = if (event.eventType == "FILE_SHARED") PhylaxGreen else Color.Yellow,
-                        radius = 5.dp.toPx() * animationProgress.value,
-                        center = Offset(point.x, animatedY)
-                    )
-                    
-                    drawCircle(
-                        color = PhylaxBlack,
-                        radius = 2.dp.toPx() * animationProgress.value,
-                        center = Offset(point.x, animatedY)
-                    )
+                // Draw Initiated Line (Yellow)
+                drawPath(
+                    path = initiatedPath,
+                    color = Color.Yellow.copy(alpha = 0.8f),
+                    style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+                )
+
+                // Draw Area Fill for Shared
+                val fillPath = Path().apply {
+                    addPath(sharedPath)
+                    lineTo(width, height)
+                    lineTo(0f, height)
+                    close()
                 }
+                drawPath(
+                    path = fillPath,
+                    brush = Brush.verticalGradient(
+                        colors = listOf(PhylaxGreen.copy(alpha = 0.2f), Color.Transparent)
+                    )
+                )
             }
         }
     }
