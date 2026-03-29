@@ -9,9 +9,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -29,8 +27,10 @@ import com.example.phylaxfileaccess.utils.getFileIcon
 import com.example.phylaxfileaccess.viewmodel.FileViewModel
 import com.example.phylaxfileaccess.viewmodel.FileViewModelFactory
 import java.util.Locale
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.BorderStroke
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun CategoryScreen(
     category: String,
@@ -38,7 +38,10 @@ fun CategoryScreen(
     onFileClick: (FileItem) -> Unit,
     onEditClick: (FileItem) -> Unit,
     onShareClick: (FileItem) -> Unit,
-    onActivityClick: (FileItem) -> Unit
+    onActivityClick: (FileItem) -> Unit,
+    onDetailsClick: (FileItem) -> Unit,
+    onMultiShareClick: (List<FileItem>) -> Unit = {},
+    onMultiLockClick: (List<FileItem>) -> Unit = {}
 ) {
     val context = LocalContext.current
     val viewModel: FileViewModel = viewModel(
@@ -46,9 +49,12 @@ fun CategoryScreen(
     )
     
     val files by viewModel.categoryFiles.collectAsState()
+    var selectedFiles by remember { mutableStateOf(setOf<FileItem>()) }
+    val isSelectionMode = selectedFiles.isNotEmpty()
 
     LaunchedEffect(category) {
         viewModel.loadFilesByCategory(category)
+        selectedFiles = emptySet()
     }
 
     Scaffold(
@@ -56,28 +62,64 @@ fun CategoryScreen(
             CenterAlignedTopAppBar(
                 title = {
                     Text(
-                        category.uppercase(),
-                        color = PhylaxGreen,
+                        if (isSelectionMode) "${selectedFiles.size} SELECTED" else category.uppercase(),
+                        color = if (isSelectionMode) Color.White else PhylaxGreen,
                         fontWeight = FontWeight.ExtraBold,
                         letterSpacing = 2.sp,
                         fontSize = 18.sp
                     )
                 },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = {
+                        if (isSelectionMode) {
+                            selectedFiles = emptySet()
+                        } else {
+                            onBack()
+                        }
+                    }) {
                         Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            imageVector = if (isSelectionMode) Icons.Default.Close else Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
                             tint = Color.White
                         )
                     }
                 },
+                actions = {
+                    if (isSelectionMode) {
+                        IconButton(onClick = { 
+                            onMultiShareClick(selectedFiles.toList())
+                            selectedFiles = emptySet()
+                        }) {
+                            Icon(Icons.Default.Share, contentDescription = "Share All", tint = PhylaxGreen)
+                        }
+                        IconButton(onClick = { 
+                            onMultiLockClick(selectedFiles.toList())
+                            selectedFiles = emptySet()
+                        }) {
+                            Icon(Icons.Default.Lock, contentDescription = "Lock All", tint = PhylaxGreen)
+                        }
+                    }
+                },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = PhylaxBlack
+                    containerColor = if (isSelectionMode) PhylaxGreen.copy(alpha = 0.2f) else PhylaxBlack
                 )
             )
         },
-        containerColor = PhylaxBlack
+        containerColor = PhylaxBlack,
+        floatingActionButton = {
+            if (isSelectionMode) {
+                ExtendedFloatingActionButton(
+                    onClick = { 
+                        if (selectedFiles.size == files.size) selectedFiles = emptySet()
+                        else selectedFiles = files.toSet()
+                    },
+                    containerColor = PhylaxGreen,
+                    contentColor = Color.Black,
+                    icon = { Icon(if (selectedFiles.size == files.size) Icons.Default.Deselect else Icons.Default.SelectAll, null) },
+                    text = { Text(if (selectedFiles.size == files.size) "Deselect All" else "Select All") }
+                )
+            }
+        }
     ) { padding ->
         if (files.isEmpty()) {
             Box(
@@ -97,12 +139,27 @@ fun CategoryScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 items(files) { file ->
+                    val isSelected = selectedFiles.contains(file)
                     CategoryFileItem(
                         file = file, 
-                        onClick = { onFileClick(file) },
+                        isSelected = isSelected,
+                        isSelectionMode = isSelectionMode,
+                        onClick = {
+                            if (isSelectionMode) {
+                                selectedFiles = if (isSelected) selectedFiles - file else selectedFiles + file
+                            } else {
+                                onFileClick(file)
+                            }
+                        },
+                        onLongClick = {
+                            if (!isSelectionMode) {
+                                selectedFiles = setOf(file)
+                            }
+                        },
                         onEditClick = { onEditClick(file) },
                         onShareClick = { onShareClick(file) },
-                        onActivityClick = { onActivityClick(file) }
+                        onActivityClick = { onActivityClick(file) },
+                        onDetailsClick = { onDetailsClick(file) }
                     )
                 }
             }
@@ -110,19 +167,31 @@ fun CategoryScreen(
     }
 }
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun CategoryFileItem(
     file: FileItem, 
+    isSelected: Boolean,
+    isSelectionMode: Boolean,
     onClick: () -> Unit, 
+    onLongClick: () -> Unit,
     onEditClick: () -> Unit, 
     onShareClick: () -> Unit,
-    onActivityClick: () -> Unit
+    onActivityClick: () -> Unit,
+    onDetailsClick: () -> Unit
 ) {
+    var showMenu by remember { mutableStateOf(false) }
+
     Surface(
-        color = PhylaxCardBg,
+        color = if (isSelected) PhylaxGreen.copy(alpha = 0.15f) else PhylaxCardBg,
         shape = RoundedCornerShape(16.dp),
+        border = if (isSelected) BorderStroke(1.dp, PhylaxGreen) else null,
         modifier = Modifier
             .fillMaxWidth()
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick
+            )
     ) {
         Row(
             modifier = Modifier
@@ -130,19 +199,16 @@ fun CategoryFileItem(
                 .fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
+            Box(
                 modifier = Modifier
-                    .weight(1f)
-                    .clickable { onClick() },
-                verticalAlignment = Alignment.CenterVertically
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .background(if (isSelected) PhylaxGreen.copy(alpha = 0.2f) else Color.White.copy(alpha = 0.05f)),
+                contentAlignment = Alignment.Center
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.05f)),
-                    contentAlignment = Alignment.Center
-                ) {
+                if (isSelected) {
+                    Icon(Icons.Default.Check, contentDescription = null, tint = PhylaxGreen)
+                } else {
                     Icon(
                         imageVector = getFileIcon(file.extension),
                         contentDescription = null,
@@ -150,56 +216,84 @@ fun CategoryFileItem(
                         modifier = Modifier.size(24.dp)
                     )
                 }
+            }
 
-                Spacer(modifier = Modifier.width(16.dp))
+            Spacer(modifier = Modifier.width(16.dp))
 
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        file.name,
-                        color = Color.White,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        file.extension.uppercase(Locale.getDefault()),
-                        color = PhylaxGray,
-                        fontSize = 12.sp
-                    )
-                }
-                
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = formatSize(file.size),
+                    file.name,
+                    color = Color.White,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    file.extension.uppercase(Locale.getDefault()),
                     color = PhylaxGray,
                     fontSize = 12.sp
                 )
             }
-
-            IconButton(onClick = onShareClick) {
-                Icon(
-                    imageVector = Icons.Default.Share,
-                    contentDescription = "Share",
-                    tint = PhylaxGreen,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-
-            IconButton(onClick = onActivityClick) {
-                Icon(
-                    imageVector = Icons.Default.History,
-                    contentDescription = "Activity",
-                    tint = PhylaxGreen,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-
-            IconButton(onClick = onEditClick) {
-                Icon(
-                    imageVector = Icons.Default.Edit,
-                    contentDescription = "Share Control",
-                    tint = PhylaxGreen,
-                    modifier = Modifier.size(20.dp)
+            
+            if (!isSelectionMode) {
+                Box {
+                    IconButton(onClick = { showMenu = true }) {
+                        Icon(
+                            imageVector = Icons.Default.MoreVert,
+                            contentDescription = "Options",
+                            tint = PhylaxGreen,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = showMenu,
+                        onDismissRequest = { showMenu = false },
+                        modifier = Modifier.background(PhylaxSurface)
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Details", color = Color.White) },
+                            leadingIcon = { Icon(Icons.Default.Info, contentDescription = null, tint = PhylaxGreen) },
+                            onClick = {
+                                showMenu = false
+                                onDetailsClick()
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Share", color = Color.White) },
+                            leadingIcon = { Icon(Icons.Default.Share, contentDescription = null, tint = PhylaxGreen) },
+                            onClick = {
+                                showMenu = false
+                                onShareClick()
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Activity", color = Color.White) },
+                            leadingIcon = { Icon(Icons.Default.History, contentDescription = null, tint = PhylaxGreen) },
+                            onClick = {
+                                showMenu = false
+                                onActivityClick()
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Share Control", color = Color.White) },
+                            leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null, tint = PhylaxGreen) },
+                            onClick = {
+                                showMenu = false
+                                onEditClick()
+                            }
+                        )
+                    }
+                }
+            } else {
+                Checkbox(
+                    checked = isSelected,
+                    onCheckedChange = { onClick() },
+                    colors = CheckboxDefaults.colors(
+                        checkedColor = PhylaxGreen,
+                        uncheckedColor = PhylaxGray,
+                        checkmarkColor = Color.Black
+                    )
                 )
             }
         }

@@ -36,9 +36,10 @@ import com.example.phylaxfileaccess.models.SharingAppInfo
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ShareControlScreen(file: FileItem, onBack: () -> Unit) {
+fun ShareControlScreen(files: List<FileItem>, onBack: () -> Unit) {
     val context = LocalContext.current
     val packageManager = context.packageManager
+    val isBatchMode = files.size > 1
     
     val sharingApps = remember {
         val intent = Intent(Intent.ACTION_SEND).apply {
@@ -55,13 +56,24 @@ fun ShareControlScreen(file: FileItem, onBack: () -> Unit) {
         }.sortedBy { it.name }
     }
 
-    // Load initial state from SharedPreferences (now interpreting as BLOCKED apps)
+    // Load initial state from SharedPreferences
     val prefs = remember { context.getSharedPreferences("phylax_prefs", Context.MODE_PRIVATE) }
     val blockedApps = remember { 
-        val saved = prefs.getStringSet("blocked_apps_${file.path}", null) ?: emptySet()
         val map = mutableStateMapOf<String, Boolean>()
-        sharingApps.forEach { app ->
-            map[app.packageName] = saved.contains(app.packageName)
+        
+        if (!isBatchMode && files.isNotEmpty()) {
+            // Load individual settings for this specific file
+            val file = files.first()
+            val saved = prefs.getStringSet("blocked_apps_${file.path}", null) ?: emptySet()
+            sharingApps.forEach { app ->
+                map[app.packageName] = saved.contains(app.packageName)
+            }
+        } else {
+            // Batch mode: Start with current global/batch defaults if needed, 
+            // but here we just clear to let user set new policy for the whole batch
+            sharingApps.forEach { app ->
+                map[app.packageName] = false
+            }
         }
         map
     }
@@ -71,7 +83,7 @@ fun ShareControlScreen(file: FileItem, onBack: () -> Unit) {
             CenterAlignedTopAppBar(
                 title = {
                     Text(
-                        "SHARE APP CONTROL",
+                        if (isBatchMode) "BATCH PROTECTION" else "FILE OVERRIDE",
                         color = PhylaxGreen,
                         fontWeight = FontWeight.ExtraBold,
                         letterSpacing = 2.sp,
@@ -101,22 +113,29 @@ fun ShareControlScreen(file: FileItem, onBack: () -> Unit) {
                 Button(
                     onClick = {
                         val selectedPackages = blockedApps.filter { it.value }.keys.toSet()
-                        prefs.edit().putStringSet("blocked_apps_${file.path}", selectedPackages).apply()
-                        Toast.makeText(context, "Access restrictions saved for ${file.name}", Toast.LENGTH_SHORT).show()
+                        
+                        files.forEach { file ->
+                            // Always save to the file-specific key to ensure this LATEST change 
+                            // takes precedence for this file in the sharing screen.
+                            prefs.edit().putStringSet("blocked_apps_${file.path}", selectedPackages).apply()
+                        }
+                        
+                        val message = if (isBatchMode) "Batch settings applied" else "Individual override saved"
+                        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
                         onBack()
                     },
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(20.dp)
                         .height(56.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F)), // Red for Blocking
+                    colors = ButtonDefaults.buttonColors(containerColor = if (isBatchMode) PhylaxGreen else Color(0xFFD32F2F)),
                     shape = RoundedCornerShape(16.dp)
                 ) {
-                    Icon(Icons.Default.Save, contentDescription = null, tint = Color.White)
+                    Icon(Icons.Default.Save, contentDescription = null, tint = if (isBatchMode) Color.Black else Color.White)
                     Spacer(Modifier.width(12.dp))
                     Text(
-                        "SAVE AND LOCK ACCESS",
-                        color = Color.White,
+                        if (isBatchMode) "APPLY TO ALL" else "OVERRIDE FOR THIS FILE",
+                        color = if (isBatchMode) Color.Black else Color.White,
                         fontWeight = FontWeight.Bold,
                         fontSize = 16.sp
                     )
@@ -130,7 +149,6 @@ fun ShareControlScreen(file: FileItem, onBack: () -> Unit) {
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            // Formatted Header Card
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -142,23 +160,22 @@ fun ShareControlScreen(file: FileItem, onBack: () -> Unit) {
                 Column(modifier = Modifier.padding(20.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
-                            Icons.Default.Block, 
+                            if (isBatchMode) Icons.Default.SettingsSuggest else Icons.Default.Block, 
                             contentDescription = null, 
-                            tint = Color(0xFFD32F2F),
+                            tint = if (isBatchMode) PhylaxGreen else Color(0xFFD32F2F),
                             modifier = Modifier.size(20.dp)
                         )
                         Spacer(Modifier.width(10.dp))
                         Text(
-                            text = "Blocking Configuration",
+                            text = if (isBatchMode) "LATEST BATCH CONFIG" else "LATEST FILE OVERRIDE",
                             color = Color.White,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold
                         )
                     }
                     Spacer(Modifier.height(12.dp))
-                    @Suppress("DEPRECATION")
                     Text(
-                        text = "File: ${file.name}",
+                        text = if (isBatchMode) "Targeting: ${files.size} files" else "File: ${files.firstOrNull()?.name}",
                         color = PhylaxGray,
                         fontSize = 13.sp,
                         maxLines = 1,
@@ -166,7 +183,9 @@ fun ShareControlScreen(file: FileItem, onBack: () -> Unit) {
                     )
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        text = "Select apps that should be BLOCKED from sharing this specific file.",
+                        text = if (isBatchMode) 
+                            "Applying this selection will update the protection policy for every selected file." 
+                            else "This setting is the most recent change and will override any previous batch policies for this file.",
                         color = PhylaxGray.copy(alpha = 0.7f),
                         fontSize = 11.sp,
                         lineHeight = 16.sp
@@ -175,7 +194,7 @@ fun ShareControlScreen(file: FileItem, onBack: () -> Unit) {
             }
 
             Text(
-                text = "BLOCK SHARING FOR",
+                text = "BLOCK APPS",
                 color = PhylaxGreen,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.ExtraBold,
@@ -243,9 +262,9 @@ fun ShareControlScreen(file: FileItem, onBack: () -> Unit) {
                                 checked = isChecked,
                                 onCheckedChange = { blockedApps[app.packageName] = it },
                                 colors = CheckboxDefaults.colors(
-                                    checkedColor = Color(0xFFD32F2F), // Red checkbox for blocking
+                                    checkedColor = if (isBatchMode) PhylaxGreen else Color(0xFFD32F2F),
                                     uncheckedColor = PhylaxGray,
-                                    checkmarkColor = Color.White
+                                    checkmarkColor = if (isBatchMode) Color.Black else Color.White
                                 )
                             )
                         }

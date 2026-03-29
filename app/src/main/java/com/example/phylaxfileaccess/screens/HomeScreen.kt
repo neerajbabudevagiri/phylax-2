@@ -1,9 +1,11 @@
 package com.example.phylaxfileaccess.screens
 
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import android.widget.Toast
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -44,6 +46,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.FileProvider
 import androidx.core.net.toUri
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.phylaxfileaccess.models.FileItem
@@ -58,6 +61,7 @@ import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
 import androidx.compose.runtime.getValue
+import java.io.File
 
 // Theme Colors
 val PhylaxGreen = Color(0xFF00FF7F)
@@ -77,9 +81,13 @@ fun HomeScreen() {
     var selectedCategory by remember { mutableStateOf<String?>(null) }
     var selectedFile by remember { mutableStateOf<FileItem?>(null) }
     var showSharingApps by remember { mutableStateOf(false) }
-    var shareControlFile by remember { mutableStateOf<FileItem?>(null) }
+    var shareControlFiles by remember { mutableStateOf<List<FileItem>?>(null) }
     var fileToShare by remember { mutableStateOf<FileItem?>(null) }
     var selectedActivityFile by remember { mutableStateOf<FileItem?>(null) }
+    var selectedDetailsFile by remember { mutableStateOf<FileItem?>(null) }
+    
+    // Multi-file state
+    var filesToShareMulti by remember { mutableStateOf<List<FileItem>?>(null) }
 
     val viewModel: FileViewModel = viewModel(
         factory = FileViewModelFactory(context)
@@ -110,6 +118,14 @@ fun HomeScreen() {
     // Permanent scrollbar alpha
     val scrollbarAlpha = 0.4f
 
+    if (selectedDetailsFile != null) {
+        FileDetailsScreen(
+            file = selectedDetailsFile!!,
+            onBack = { selectedDetailsFile = null }
+        )
+        return
+    }
+
     if (selectedActivityFile != null) {
         ActivityScreen(
             file = selectedActivityFile!!,
@@ -118,10 +134,10 @@ fun HomeScreen() {
         return
     }
 
-    if (shareControlFile != null) {
+    if (shareControlFiles != null) {
         ShareControlScreen(
-            file = shareControlFile!!,
-            onBack = { shareControlFile = null }
+            files = shareControlFiles!!,
+            onBack = { shareControlFiles = null }
         )
         return
     }
@@ -130,6 +146,14 @@ fun HomeScreen() {
         SharingAppsScreen(
             fileItem = fileToShare,
             onBack = { fileToShare = null }
+        )
+        return
+    }
+    
+    if (filesToShareMulti != null) {
+        SharingAppsScreen(
+            fileItem = filesToShareMulti!!.firstOrNull(), 
+            onBack = { filesToShareMulti = null }
         )
         return
     }
@@ -158,13 +182,38 @@ fun HomeScreen() {
                 selectedFile = file
             },
             onEditClick = { file ->
-                shareControlFile = file
+                shareControlFiles = listOf(file)
             },
             onShareClick = { file ->
                 fileToShare = file
             },
             onActivityClick = { file ->
                 selectedActivityFile = file
+            },
+            onDetailsClick = { file ->
+                selectedDetailsFile = file
+            },
+            onMultiShareClick = { files ->
+                filesToShareMulti = files
+                
+                if (files.isNotEmpty()) {
+                    val uris = ArrayList<Uri>()
+                    files.forEach { fileItem ->
+                        val file = File(fileItem.path)
+                        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+                        uris.add(uri)
+                    }
+                    
+                    val intent = Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+                        type = "*/*"
+                        putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    context.startActivity(Intent.createChooser(intent, "Share ${files.size} files"))
+                }
+            },
+            onMultiLockClick = { files ->
+                shareControlFiles = files
             }
         )
         return
@@ -234,7 +283,7 @@ fun HomeScreen() {
                     }
 
                     NavigationItem("Control Access", Icons.Default.Lock, false) { scope.launch { drawerState.close() } }
-                    NavigationItem("Sharing Apps", Icons.Default.Share, false) { 
+                    NavigationItem("Sharing Apps", Icons.Default.Share, false) {
                         scope.launch { 
                             drawerState.close() 
                             showSharingApps = true
@@ -343,9 +392,10 @@ fun HomeScreen() {
                         MorphingStaggeredEntrance(index = index + categories.size + 3, isLaunched = isLaunched) {
                             RecentFileListItem(
                                 file = file, 
-                                onEditClick = { shareControlFile = it },
+                                onEditClick = { shareControlFiles = listOf(it) },
                                 onShareClick = { fileToShare = it },
-                                onActivityClick = { selectedActivityFile = it }
+                                onActivityClick = { selectedActivityFile = it },
+                                onDetailsClick = { selectedDetailsFile = it }
                             )
                         }
                     }
@@ -751,9 +801,12 @@ fun RecentFileListItem(
     file: FileItem, 
     onEditClick: (FileItem) -> Unit, 
     onShareClick: (FileItem) -> Unit,
-    onActivityClick: (FileItem) -> Unit
+    onActivityClick: (FileItem) -> Unit,
+    onDetailsClick: (FileItem) -> Unit
 ) {
     val context = LocalContext.current
+    var showMenu by remember { mutableStateOf(false) }
+
     Surface(
         color = PhylaxCardBg,
         shape = RoundedCornerShape(20.dp),
@@ -825,31 +878,53 @@ fun RecentFileListItem(
                 )
             }
             
-            IconButton(onClick = { onShareClick(file) }) {
-                Icon(
-                    imageVector = Icons.Default.Share,
-                    contentDescription = "Share",
-                    tint = PhylaxGreen,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-
-            IconButton(onClick = { onActivityClick(file) }) {
-                Icon(
-                    imageVector = Icons.Default.History,
-                    contentDescription = "Activity",
-                    tint = PhylaxGreen,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-
-            IconButton(onClick = { onEditClick(file) }) {
-                Icon(
-                    imageVector = Icons.Default.Edit,
-                    contentDescription = "Share Control",
-                    tint = PhylaxGreen,
-                    modifier = Modifier.size(18.dp)
-                )
+            Box {
+                IconButton(onClick = { showMenu = true }) {
+                    Icon(
+                        imageVector = Icons.Default.MoreVert,
+                        contentDescription = "Options",
+                        tint = PhylaxGreen,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                DropdownMenu(
+                    expanded = showMenu,
+                    onDismissRequest = { showMenu = false },
+                    modifier = Modifier.background(PhylaxSurface)
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Details", color = Color.White) },
+                        leadingIcon = { Icon(Icons.Default.Info, contentDescription = null, tint = PhylaxGreen) },
+                        onClick = {
+                            showMenu = false
+                            onDetailsClick(file)
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Share", color = Color.White) },
+                        leadingIcon = { Icon(Icons.Default.Share, contentDescription = null, tint = PhylaxGreen) },
+                        onClick = {
+                            showMenu = false
+                            onShareClick(file)
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Activity", color = Color.White) },
+                        leadingIcon = { Icon(Icons.Default.History, contentDescription = null, tint = PhylaxGreen) },
+                        onClick = {
+                            showMenu = false
+                            onActivityClick(file)
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Share Control", color = Color.White) },
+                        leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null, tint = PhylaxGreen) },
+                        onClick = {
+                            showMenu = false
+                            onEditClick(file)
+                        }
+                    )
+                }
             }
         }
     }
