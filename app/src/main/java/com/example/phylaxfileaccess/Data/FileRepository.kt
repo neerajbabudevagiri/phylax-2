@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Environment
 import android.os.StatFs
 import android.provider.MediaStore
+import com.example.phylaxfileaccess.models.CategoryInfo
 import com.example.phylaxfileaccess.models.FileActivityEvent
 import com.example.phylaxfileaccess.models.FileItem
 import com.example.phylaxfileaccess.models.StorageInfo
@@ -59,16 +60,8 @@ class FileRepository(private val context: Context) {
         return files
     }
 
-    fun getFilesByCategory(category: String): List<FileItem> {
-        val files = mutableListOf<FileItem>()
-        val uri = MediaStore.Files.getContentUri("external")
-        val projection = arrayOf(
-            MediaStore.Files.FileColumns.DISPLAY_NAME,
-            MediaStore.Files.FileColumns.DATA,
-            MediaStore.Files.FileColumns.SIZE
-        )
-
-        val selection = when (category.lowercase()) {
+    private fun getCategorySelection(category: String): String? {
+        return when (category.lowercase()) {
             "images" -> "${MediaStore.Files.FileColumns.MEDIA_TYPE} = ${MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE}"
             "videos" -> "${MediaStore.Files.FileColumns.MEDIA_TYPE} = ${MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO}"
             "audio" -> "${MediaStore.Files.FileColumns.MEDIA_TYPE} = ${MediaStore.Files.FileColumns.MEDIA_TYPE_AUDIO}"
@@ -87,6 +80,18 @@ class FileRepository(private val context: Context) {
             }
             else -> null
         }
+    }
+
+    fun getFilesByCategory(category: String): List<FileItem> {
+        val files = mutableListOf<FileItem>()
+        val uri = MediaStore.Files.getContentUri("external")
+        val projection = arrayOf(
+            MediaStore.Files.FileColumns.DISPLAY_NAME,
+            MediaStore.Files.FileColumns.DATA,
+            MediaStore.Files.FileColumns.SIZE
+        )
+
+        val selection = getCategorySelection(category)
 
         val cursor = context.contentResolver.query(
             uri,
@@ -118,6 +123,80 @@ class FileRepository(private val context: Context) {
             }
         }
         return files
+    }
+
+    fun searchFiles(query: String): List<FileItem> {
+        val files = mutableListOf<FileItem>()
+        val uri = MediaStore.Files.getContentUri("external")
+        val projection = arrayOf(
+            MediaStore.Files.FileColumns.DISPLAY_NAME,
+            MediaStore.Files.FileColumns.DATA,
+            MediaStore.Files.FileColumns.SIZE
+        )
+        
+        val selection = "${MediaStore.Files.FileColumns.DISPLAY_NAME} LIKE ?"
+        val selectionArgs = arrayOf("%$query%")
+
+        val cursor = context.contentResolver.query(
+            uri,
+            projection,
+            selection,
+            selectionArgs,
+            "${MediaStore.Files.FileColumns.DATE_ADDED} DESC"
+        )
+
+        cursor?.use {
+            val nameIndex = it.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DISPLAY_NAME)
+            val pathIndex = it.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DATA)
+            val sizeIndex = it.getColumnIndexOrThrow(MediaStore.Files.FileColumns.SIZE)
+
+            while (it.moveToNext()) {
+                val name = it.getString(nameIndex) ?: continue
+                val path = it.getString(pathIndex) ?: continue
+                val size = it.getLong(sizeIndex)
+
+                files.add(
+                    FileItem(
+                        name = name,
+                        path = path,
+                        size = size,
+                        extension = name.substringAfterLast(".", ""),
+                        isDirectory = false
+                    )
+                )
+                if (files.size >= 50) break
+            }
+        }
+        return files
+    }
+
+    fun getCategoryInfo(category: String): CategoryInfo {
+        val uri = MediaStore.Files.getContentUri("external")
+        val projection = arrayOf(
+            "COUNT(*)",
+            "SUM(${MediaStore.Files.FileColumns.SIZE})"
+        )
+        val selection = getCategorySelection(category)
+
+        val cursor = context.contentResolver.query(
+            uri,
+            projection,
+            selection,
+            null,
+            null
+        )
+
+        var count = 0
+        var totalSize = 0L
+
+        cursor?.use {
+            if (it.moveToFirst()) {
+                count = it.getInt(0)
+                totalSize = it.getLong(1)
+            }
+        }
+
+        return CategoryInfo(category, count, totalSize)
     }
 
     fun getStorageInfo(): StorageInfo {

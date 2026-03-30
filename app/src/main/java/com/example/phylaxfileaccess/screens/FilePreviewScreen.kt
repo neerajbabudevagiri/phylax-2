@@ -19,9 +19,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.FileProvider
 import coil.compose.AsyncImage
 import com.example.phylaxfileaccess.models.FileItem
 import com.example.phylaxfileaccess.utils.getFileIcon
+import com.example.phylaxfileaccess.ui.theme.*
 import java.io.File
 import java.util.Locale
 
@@ -122,11 +124,20 @@ fun FilePreviewScreen(
 
             Button(
                 onClick = {
-                    val intent = Intent(Intent.ACTION_VIEW)
-                    val uri = Uri.fromFile(File(file.path))
-                    intent.setDataAndType(uri, "*/*")
-                    intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    context.startActivity(intent)
+                    try {
+                        val intent = Intent(Intent.ACTION_VIEW)
+                        val fileObj = File(file.path)
+                        val uri = FileProvider.getUriForFile(
+                            context,
+                            "${context.packageName}.fileprovider",
+                            fileObj
+                        )
+                        intent.setDataAndType(uri, context.contentResolver.getType(uri) ?: "*/*")
+                        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        context.startActivity(intent)
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
                 },
                 modifier = Modifier
                     .fillMaxWidth()

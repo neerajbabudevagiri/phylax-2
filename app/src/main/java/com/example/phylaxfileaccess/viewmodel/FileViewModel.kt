@@ -26,6 +26,12 @@ class FileViewModel(private val repository: FileRepository) : ViewModel() {
     private val _activityEvents = MutableStateFlow<List<FileActivityEvent>>(emptyList())
     val activityEvents: StateFlow<List<FileActivityEvent>> = _activityEvents.asStateFlow()
 
+    private val _searchResults = MutableStateFlow<List<FileItem>>(emptyList())
+    val searchResults: StateFlow<List<FileItem>> = _searchResults.asStateFlow()
+
+    private val _searchQuery = MutableStateFlow("")
+    val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
+
     fun loadFiles() {
         viewModelScope.launch(Dispatchers.IO) {
             _recentFiles.value = repository.getRecentFiles()
@@ -53,6 +59,17 @@ class FileViewModel(private val repository: FileRepository) : ViewModel() {
     fun loadActivityEvents(filePath: String) {
         viewModelScope.launch(Dispatchers.IO) {
             _activityEvents.value = repository.getActivityEvents(filePath)
+        }
+    }
+
+    fun searchFiles(query: String) {
+        _searchQuery.value = query
+        if (query.isEmpty()) {
+            _searchResults.value = emptyList()
+            return
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            _searchResults.value = repository.searchFiles(query)
         }
     }
 }

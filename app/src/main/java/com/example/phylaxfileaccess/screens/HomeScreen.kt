@@ -54,6 +54,7 @@ import com.example.phylaxfileaccess.viewmodel.FileViewModel
 import com.example.phylaxfileaccess.viewmodel.FileViewModelFactory
 import com.example.phylaxfileaccess.utils.getFileIcon
 import com.example.phylaxfileaccess.models.StorageInfo
+import com.example.phylaxfileaccess.ui.theme.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.Locale
@@ -62,13 +63,6 @@ import kotlin.math.cos
 import kotlin.math.sin
 import androidx.compose.runtime.getValue
 import java.io.File
-
-// Theme Colors
-val PhylaxGreen = Color(0xFF00FF7F)
-val PhylaxBlack = Color(0xFF080808)
-val PhylaxCardBg = Color(0xFF151515)
-val PhylaxGray = Color(0xFF9E9E9E)
-val PhylaxSurface = Color(0xFF1E1E1E)
 
 // Squaricle shape constant
 val SquaricleShape = RoundedCornerShape(28.dp)
@@ -85,6 +79,7 @@ fun HomeScreen() {
     var fileToShare by remember { mutableStateOf<FileItem?>(null) }
     var selectedActivityFile by remember { mutableStateOf<FileItem?>(null) }
     var selectedDetailsFile by remember { mutableStateOf<FileItem?>(null) }
+    var showSearch by remember { mutableStateOf(false) }
     
     // Multi-file state
     var filesToShareMulti by remember { mutableStateOf<List<FileItem>?>(null) }
@@ -118,6 +113,7 @@ fun HomeScreen() {
     // Permanent scrollbar alpha
     val scrollbarAlpha = 0.4f
 
+    // Navigation priority: Detail screens shown "on top" of Search and Home
     if (selectedDetailsFile != null) {
         FileDetailsScreen(
             file = selectedDetailsFile!!,
@@ -170,6 +166,19 @@ fun HomeScreen() {
         SharingAppsScreen(
             fileItem = null,
             onBack = { showSharingApps = false }
+        )
+        return
+    }
+
+    // Search screen follows sub-screens in priority.
+    if (showSearch) {
+        SearchScreen(
+            onBack = { showSearch = false },
+            onFileClick = { file -> selectedFile = file },
+            onEditClick = { file -> shareControlFiles = listOf(file) },
+            onShareClick = { file -> fileToShare = file },
+            onActivityClick = { file -> selectedActivityFile = file },
+            onDetailsClick = { file -> selectedDetailsFile = file }
         )
         return
     }
@@ -282,14 +291,12 @@ fun HomeScreen() {
                         }
                     }
 
-                    NavigationItem("Control Access", Icons.Default.Lock, false) { scope.launch { drawerState.close() } }
-                    NavigationItem("Sharing Apps", Icons.Default.Share, false) {
+                    NavigationItem("Sharing Apps", Icons.Default.Share, false) { 
                         scope.launch { 
                             drawerState.close() 
                             showSharingApps = true
                         } 
                     }
-                    NavigationItem("Recent Activity", Icons.Default.History, false) { scope.launch { drawerState.close() } }
                     NavigationItem("Settings", Icons.Default.Settings, false) { scope.launch { drawerState.close() } }
                     NavigationItem("About App", Icons.Default.Info, false) { scope.launch { drawerState.close() } }
                     
@@ -317,7 +324,7 @@ fun HomeScreen() {
                         }
                     },
                     actions = {
-                        IconButton(onClick = { }) {
+                        IconButton(onClick = { showSearch = true }) {
                             Icon(Icons.Default.Search, contentDescription = "Search", tint = Color.White)
                         }
                     },
@@ -392,6 +399,7 @@ fun HomeScreen() {
                         MorphingStaggeredEntrance(index = index + categories.size + 3, isLaunched = isLaunched) {
                             RecentFileListItem(
                                 file = file, 
+                                onFileClick = { selectedFile = it },
                                 onEditClick = { shareControlFiles = listOf(it) },
                                 onShareClick = { fileToShare = it },
                                 onActivityClick = { selectedActivityFile = it },
@@ -799,6 +807,7 @@ fun CategoryCard(category: CategoryData, onClick: () -> Unit) {
 @Composable
 fun RecentFileListItem(
     file: FileItem, 
+    onFileClick: (FileItem) -> Unit,
     onEditClick: (FileItem) -> Unit, 
     onShareClick: (FileItem) -> Unit,
     onActivityClick: (FileItem) -> Unit,
@@ -824,15 +833,7 @@ fun RecentFileListItem(
             Row(
                 modifier = Modifier
                     .weight(1f)
-                    .clickable {
-                        val intent = Intent(Intent.ACTION_VIEW)
-                        intent.setDataAndType(
-                            Uri.fromFile(java.io.File(file.path)),
-                            "*/*"
-                        )
-                        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                        context.startActivity(intent)
-                    },
+                    .clickable { onFileClick(file) },
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Box(

@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import com.example.phylaxfileaccess.models.FileItem
 import com.example.phylaxfileaccess.models.SharingAppInfo
+import com.example.phylaxfileaccess.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

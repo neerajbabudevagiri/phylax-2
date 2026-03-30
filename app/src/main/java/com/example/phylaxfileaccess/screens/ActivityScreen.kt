@@ -40,6 +40,7 @@ import com.example.phylaxfileaccess.viewmodel.FileViewModelFactory
 import java.text.SimpleDateFormat
 import java.util.*
 import androidx.compose.ui.graphics.nativeCanvas
+import com.example.phylaxfileaccess.ui.theme.*
 
 enum class ChartType { LINE, BAR }
 

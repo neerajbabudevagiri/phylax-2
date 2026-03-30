@@ -29,6 +29,7 @@ import com.example.phylaxfileaccess.viewmodel.FileViewModelFactory
 import java.util.Locale
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.BorderStroke
+import com.example.phylaxfileaccess.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable

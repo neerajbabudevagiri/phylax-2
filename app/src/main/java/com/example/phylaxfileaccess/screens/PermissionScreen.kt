@@ -33,13 +33,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.net.toUri
+import com.example.phylaxfileaccess.ui.theme.*
 
 @Composable
 fun PermissionScreen() {
     val context = LocalContext.current
-    val phylaxGreen = Color(0xFF00FF7F)
-    val bgStart = Color(0xFF141414)
-    val bgEnd = Color(0xFF080808)
     val scrollState = rememberScrollState()
 
     var startAnimation by remember { mutableStateOf(false) }
@@ -50,7 +48,7 @@ fun PermissionScreen() {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Brush.verticalGradient(listOf(bgStart, bgEnd)))
+            .background(Brush.verticalGradient(listOf(PhylaxBlack, Color.Black)))
     ) {
         // Ambient Background
         val infiniteTransition = rememberInfiniteTransition(label = "ambient")
@@ -69,7 +67,7 @@ fun PermissionScreen() {
                 val y = (size.height * (index / 3f))
                 drawCircle(
                     brush = Brush.radialGradient(
-                        colors = listOf(phylaxGreen.copy(alpha = 0.08f), Color.Transparent),
+                        colors = listOf(PhylaxGreen.copy(alpha = 0.08f), Color.Transparent),
                         center = Offset(x, y),
                         radius = 200f + (index * 50f)
                     ),
@@ -97,14 +95,14 @@ fun PermissionScreen() {
                     Box(
                         modifier = Modifier
                             .size(100.dp)
-                            .shadow(30.dp, CircleShape, spotColor = phylaxGreen)
-                            .background(phylaxGreen.copy(alpha = 0.1f), CircleShape)
-                            .border(1.dp, phylaxGreen.copy(alpha = 0.3f), CircleShape)
+                            .shadow(30.dp, CircleShape, spotColor = PhylaxGreen)
+                            .background(PhylaxGreen.copy(alpha = 0.1f), CircleShape)
+                            .border(1.dp, PhylaxGreen.copy(alpha = 0.3f), CircleShape)
                     )
                     Icon(
                         imageVector = Icons.Default.GppMaybe,
                         contentDescription = null,
-                        tint = phylaxGreen,
+                        tint = PhylaxGreen,
                         modifier = Modifier.size(48.dp)
                     )
                 }
@@ -120,11 +118,11 @@ fun PermissionScreen() {
                 Text(
                     text = "AUTHORIZATION REQUIRED",
                     style = TextStyle(
-                        color = phylaxGreen,
+                        color = PhylaxGreen,
                         fontSize = 18.sp,
                         fontWeight = FontWeight.ExtraBold,
                         letterSpacing = 4.sp,
-                        shadow = Shadow(phylaxGreen.copy(0.5f), blurRadius = 20f)
+                        shadow = Shadow(PhylaxGreen.copy(0.5f), blurRadius = 20f)
                     ),
                     textAlign = TextAlign.Center
                 )
@@ -173,14 +171,14 @@ fun PermissionScreen() {
                         }
                     },
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = phylaxGreen,
+                        containerColor = PhylaxGreen,
                         contentColor = Color.Black
                     ),
                     shape = RoundedCornerShape(16.dp),
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(56.dp)
-                        .shadow(12.dp, RoundedCornerShape(16.dp), spotColor = phylaxGreen),
+                        .shadow(12.dp, RoundedCornerShape(16.dp), spotColor = PhylaxGreen),
                     contentPadding = PaddingValues(horizontal = 24.dp)
                 ) {
                     Text(

@@ -39,6 +39,7 @@ import com.example.phylaxfileaccess.viewmodel.FileViewModel
 import com.example.phylaxfileaccess.viewmodel.FileViewModelFactory
 import java.io.File
 import java.util.UUID
+import com.example.phylaxfileaccess.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
