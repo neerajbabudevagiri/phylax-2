@@ -78,7 +78,8 @@ class FileRepository(private val context: Context) {
                     "${MediaStore.Files.FileColumns.DATA} LIKE '%.${it}'" 
                 }
             }
-            else -> null
+            "recent files", "all files" -> null
+            else -> "${MediaStore.Files.FileColumns._ID} = -1" // Force empty for custom categories
         }
     }
 
@@ -172,28 +173,33 @@ class FileRepository(private val context: Context) {
 
     fun getCategoryInfo(category: String): CategoryInfo {
         val uri = MediaStore.Files.getContentUri("external")
+        // Only select columns that are guaranteed to exist. Aggregate functions are not standard in MediaStore projection.
         val projection = arrayOf(
-            "COUNT(*)",
-            "SUM(${MediaStore.Files.FileColumns.SIZE})"
+            MediaStore.Files.FileColumns.SIZE
         )
         val selection = getCategorySelection(category)
-
-        val cursor = context.contentResolver.query(
-            uri,
-            projection,
-            selection,
-            null,
-            null
-        )
 
         var count = 0
         var totalSize = 0L
 
-        cursor?.use {
-            if (it.moveToFirst()) {
-                count = it.getInt(0)
-                totalSize = it.getLong(1)
+        try {
+            context.contentResolver.query(
+                uri,
+                projection,
+                selection,
+                null,
+                null
+            )?.use { cursor ->
+                val sizeIndex = cursor.getColumnIndex(MediaStore.Files.FileColumns.SIZE)
+                while (cursor.moveToNext()) {
+                    count++
+                    if (sizeIndex != -1) {
+                        totalSize += cursor.getLong(sizeIndex)
+                    }
+                }
             }
+        } catch (e: Exception) {
+            // Log or handle error - returning zeroed info is safer than crashing
         }
 
         return CategoryInfo(category, count, totalSize)

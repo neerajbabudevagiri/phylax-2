@@ -3,6 +3,7 @@ package com.example.phylaxfileaccess.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.phylaxfileaccess.data.FileRepository
+import com.example.phylaxfileaccess.models.CategoryInfo
 import com.example.phylaxfileaccess.models.FileActivityEvent
 import com.example.phylaxfileaccess.models.FileItem
 import com.example.phylaxfileaccess.models.StorageInfo
@@ -22,6 +23,9 @@ class FileViewModel(private val repository: FileRepository) : ViewModel() {
 
     private val _storage = MutableStateFlow<StorageInfo?>(null)
     val storage: StateFlow<StorageInfo?> = _storage.asStateFlow()
+
+    private val _categoriesInfo = MutableStateFlow<List<CategoryInfo>>(emptyList())
+    val categoriesInfo: StateFlow<List<CategoryInfo>> = _categoriesInfo.asStateFlow()
 
     private val _activityEvents = MutableStateFlow<List<FileActivityEvent>>(emptyList())
     val activityEvents: StateFlow<List<FileActivityEvent>> = _activityEvents.asStateFlow()
@@ -47,6 +51,14 @@ class FileViewModel(private val repository: FileRepository) : ViewModel() {
     fun loadStorage() {
         viewModelScope.launch(Dispatchers.IO) {
             _storage.value = repository.getStorageInfo()
+        }
+    }
+
+    fun loadAllCategoriesInfo() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val categories = listOf("Images", "Videos", "Audio", "Documents", "APK Files", "Archives")
+            val info = categories.map { repository.getCategoryInfo(it) }
+            _categoriesInfo.value = info
         }
     }
 

@@ -11,17 +11,20 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -54,6 +57,7 @@ import com.example.phylaxfileaccess.viewmodel.FileViewModel
 import com.example.phylaxfileaccess.viewmodel.FileViewModelFactory
 import com.example.phylaxfileaccess.utils.getFileIcon
 import com.example.phylaxfileaccess.models.StorageInfo
+import com.example.phylaxfileaccess.models.CategoryInfo
 import com.example.phylaxfileaccess.ui.theme.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -73,6 +77,7 @@ fun HomeScreen() {
     val context = LocalContext.current
 
     var selectedCategory by remember { mutableStateOf<String?>(null) }
+    var showAllCategories by remember { mutableStateOf(false) }
     var selectedFile by remember { mutableStateOf<FileItem?>(null) }
     var showSharingApps by remember { mutableStateOf(false) }
     var shareControlFiles by remember { mutableStateOf<List<FileItem>?>(null) }
@@ -80,6 +85,10 @@ fun HomeScreen() {
     var selectedActivityFile by remember { mutableStateOf<FileItem?>(null) }
     var selectedDetailsFile by remember { mutableStateOf<FileItem?>(null) }
     var showSearch by remember { mutableStateOf(false) }
+    var showAboutApp by remember { mutableStateOf(false) }
+    var showDashboard by remember { mutableStateOf(false) }
+    var showAddCategoryDialog by remember { mutableStateOf(false) }
+    var categoryToDelete by remember { mutableStateOf<String?>(null) }
     
     // Multi-file state
     var filesToShareMulti by remember { mutableStateOf<List<FileItem>?>(null) }
@@ -90,10 +99,12 @@ fun HomeScreen() {
 
     val files by viewModel.recentFiles.collectAsState()
     val storage by viewModel.storage.collectAsState()
+    val categoriesInfo by viewModel.categoriesInfo.collectAsState()
 
     LaunchedEffect(Unit) {
         viewModel.loadFiles()
         viewModel.loadStorage()
+        viewModel.loadAllCategoriesInfo()
     }
 
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -112,6 +123,110 @@ fun HomeScreen() {
 
     // Permanent scrollbar alpha
     val scrollbarAlpha = 0.4f
+
+    var customCategories by remember { mutableStateOf(listOf<CategoryData>()) }
+    
+    val categories = remember(categoriesInfo, customCategories) {
+        val baseCategories = if (categoriesInfo.isEmpty()) {
+            listOf(
+                CategoryData("Images", "0 files", "0 B", Icons.Default.Image),
+                CategoryData("Videos", "0 files", "0 B", Icons.Default.PlayArrow),
+                CategoryData("Documents", "0 files", "0 B", Icons.Default.Description),
+                CategoryData("Audio", "0 files", "0 B", Icons.Default.Audiotrack),
+                CategoryData("APK Files", "0 files", "0 B", Icons.Default.Android),
+                CategoryData("Archives", "0 files", "0 B", Icons.Default.Folder)
+            )
+        } else {
+            categoriesInfo.map { info ->
+                CategoryData(
+                    name = info.name,
+                    count = "${info.count} files",
+                    size = formatSize(info.size),
+                    icon = when (info.name.lowercase()) {
+                        "images" -> Icons.Default.Image
+                        "videos" -> Icons.Default.PlayArrow
+                        "audio" -> Icons.Default.Audiotrack
+                        "documents" -> Icons.Default.Description
+                        "apk files" -> Icons.Default.Android
+                        "archives" -> Icons.Default.Folder
+                        else -> Icons.Default.Folder
+                    }
+                )
+            }
+        }
+        baseCategories + customCategories
+    }
+
+    if (showAddCategoryDialog) {
+        var categoryName by remember { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = { showAddCategoryDialog = false },
+            title = { Text("Add New Category", color = Color.White) },
+            containerColor = PhylaxSurface,
+            text = {
+                OutlinedTextField(
+                    value = categoryName,
+                    onValueChange = { categoryName = it },
+                    label = { Text("Category Name") },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = PhylaxGreen,
+                        unfocusedBorderColor = PhylaxGray,
+                        focusedLabelColor = PhylaxGreen,
+                        unfocusedLabelColor = PhylaxGray,
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (categoryName.isNotBlank()) {
+                            customCategories = customCategories + CategoryData(
+                                name = categoryName,
+                                count = "0 files",
+                                size = "0 B",
+                                icon = Icons.Default.FolderOpen
+                            )
+                            showAddCategoryDialog = false
+                        }
+                    }
+                ) {
+                    Text("Add", color = PhylaxGreen)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAddCategoryDialog = false }) {
+                    Text("Cancel", color = PhylaxGray)
+                }
+            }
+        )
+    }
+
+    if (categoryToDelete != null) {
+        AlertDialog(
+            onDismissRequest = { categoryToDelete = null },
+            title = { Text("Delete Category", color = Color.White) },
+            text = { Text("Are you sure you want to delete the category \"$categoryToDelete\"?", color = PhylaxGray) },
+            containerColor = PhylaxSurface,
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        customCategories = customCategories.filter { it.name != categoryToDelete }
+                        categoryToDelete = null
+                    }
+                ) {
+                    Text("Delete", color = Color.Red)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { categoryToDelete = null }) {
+                    Text("Cancel", color = Color.White)
+                }
+            }
+        )
+    }
 
     // Navigation priority: Detail screens shown "on top" of Search and Home
     if (selectedDetailsFile != null) {
@@ -170,6 +285,21 @@ fun HomeScreen() {
         return
     }
 
+    if (showAboutApp) {
+        AboutAppScreen(
+            storage = storage,
+            onBack = { showAboutApp = false }
+        )
+        return
+    }
+
+    if (showDashboard) {
+        DashboardScreen(
+            onBack = { showDashboard = false }
+        )
+        return
+    }
+
     // Search screen follows sub-screens in priority.
     if (showSearch) {
         SearchScreen(
@@ -183,6 +313,7 @@ fun HomeScreen() {
         return
     }
 
+    // Category Screen takes priority over All Categories screen to allow proper "back" navigation
     if (selectedCategory != null) {
         CategoryScreen(
             category = selectedCategory!!,
@@ -223,6 +354,21 @@ fun HomeScreen() {
             },
             onMultiLockClick = { files ->
                 shareControlFiles = files
+            }
+        )
+        return
+    }
+
+    if (showAllCategories) {
+        AllCategoriesScreen(
+            categories = categories,
+            deletableCategoryNames = customCategories.map { it.name }.toSet(),
+            onBack = { showAllCategories = false },
+            onCategoryClick = { category ->
+                selectedCategory = category
+            },
+            onDeleteCategory = { categoryName ->
+                categoryToDelete = categoryName
             }
         )
         return
@@ -273,7 +419,8 @@ fun HomeScreen() {
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 24.dp), color = PhylaxSurface)
                     Spacer(Modifier.height(16.dp))
 
-                    NavigationItem("Dashboard", Icons.Default.Dashboard, true) { scope.launch { drawerState.close() } }
+                    NavigationItem("Home", Icons.Default.Home, !showDashboard) { scope.launch { drawerState.close(); showDashboard = false } }
+                    NavigationItem("Dashboard", Icons.Default.Dashboard, showDashboard) { scope.launch { drawerState.close(); showDashboard = true } }
                     
                     NavigationItem("File Permissions", Icons.Default.GppGood, false) {
                         scope.launch {
@@ -297,8 +444,21 @@ fun HomeScreen() {
                             showSharingApps = true
                         } 
                     }
-                    NavigationItem("Settings", Icons.Default.Settings, false) { scope.launch { drawerState.close() } }
-                    NavigationItem("About App", Icons.Default.Info, false) { scope.launch { drawerState.close() } }
+                    NavigationItem("Settings", Icons.Default.Settings, false) { 
+                        scope.launch { 
+                            drawerState.close() 
+                            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                data = Uri.fromParts("package", context.packageName, null)
+                            }
+                            context.startActivity(intent)
+                        } 
+                    }
+                    NavigationItem("About App", Icons.Default.Info, false) { 
+                        scope.launch { 
+                            drawerState.close() 
+                            showAboutApp = true
+                        } 
+                    }
                     
                     Spacer(Modifier.height(24.dp))
                 }
@@ -335,7 +495,7 @@ fun HomeScreen() {
             },
             floatingActionButton = {
                 FloatingActionButton(
-                    onClick = { },
+                    onClick = { showAddCategoryDialog = true },
                     containerColor = PhylaxGreen,
                     contentColor = Color.Black,
                     shape = CircleShape,
@@ -346,15 +506,6 @@ fun HomeScreen() {
             },
             containerColor = PhylaxBlack
         ) { paddingValues ->
-            val categories = listOf(
-                CategoryData("Images", "1,248 files", "2.3 GB", Icons.Default.Image),
-                CategoryData("Videos", "86 files", "12.5 GB", Icons.Default.PlayArrow),
-                CategoryData("Documents", "452 files", "1.2 GB", Icons.Default.Description),
-                CategoryData("Audio", "320 files", "3.1 GB", Icons.Default.Audiotrack),
-                CategoryData("APK Files", "15 files", "850 MB", Icons.Default.Android),
-                CategoryData("Archives", "24 files", "5.4 GB", Icons.Default.Folder)
-            )
-
             Box(modifier = Modifier.fillMaxSize()) {
                 LazyVerticalGrid(
                     state = gridState,
@@ -368,27 +519,42 @@ fun HomeScreen() {
                 ) {
                     item(span = { GridItemSpan(maxLineSpan) }) {
                         MorphingStaggeredEntrance(index = 0, isLaunched = isLaunched) {
-                            StorageOverviewCard(storage)
+                            StorageOverviewCard(
+                                storage = storage,
+                                onClick = { showDashboard = true }
+                            )
                         }
                     }
 
                     item(span = { GridItemSpan(maxLineSpan) }) {
                         StaggeredEntrance(index = 1, isLaunched = isLaunched) {
-                            SectionHeader("Categories") {}
+                            SectionHeader("Categories") {
+                                showAllCategories = true
+                            }
                         }
                     }
 
                     itemsIndexed(categories) { index, category ->
+                        val isDeletable = customCategories.any { it.name == category.name }
                         MorphingStaggeredEntrance(index = index + 2, isLaunched = isLaunched) {
-                            CategoryCard(category) {
-                                selectedCategory = category.name
-                            }
+                            CategoryCard(
+                                category = category,
+                                isDeletable = isDeletable,
+                                onClick = {
+                                    selectedCategory = category.name
+                                },
+                                onDelete = {
+                                    categoryToDelete = category.name
+                                }
+                            )
                         }
                     }
 
                     item(span = { GridItemSpan(maxLineSpan) }) {
                         StaggeredEntrance(index = categories.size + 2, isLaunched = isLaunched) {
-                            SectionHeader("Recent Files") {}
+                            SectionHeader("Recent Files") {
+                                selectedCategory = "Recent Files"
+                            }
                         }
                     }
 
@@ -442,6 +608,88 @@ fun HomeScreen() {
                                     .background(PhylaxGreen.copy(alpha = scrollbarAlpha))
                             )
                             if (bottomWeight > 0) Spacer(modifier = Modifier.weight(bottomWeight))
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AllCategoriesScreen(
+    categories: List<CategoryData>,
+    deletableCategoryNames: Set<String>,
+    onBack: () -> Unit,
+    onCategoryClick: (String) -> Unit,
+    onDeleteCategory: (String) -> Unit
+) {
+    Scaffold(
+        topBar = {
+            CenterAlignedTopAppBar(
+                title = {
+                    Text(
+                        "CATEGORIES",
+                        color = PhylaxGreen,
+                        fontWeight = FontWeight.ExtraBold,
+                        letterSpacing = 2.sp,
+                        fontSize = 18.sp
+                    )
+                },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Color.White)
+                    }
+                },
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = PhylaxBlack)
+            )
+        },
+        containerColor = PhylaxBlack
+    ) { padding ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding),
+            contentPadding = PaddingValues(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            items(categories) { category ->
+                val isDeletable = deletableCategoryNames.contains(category.name)
+                Surface(
+                    color = PhylaxCardBg,
+                    shape = RoundedCornerShape(20.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onCategoryClick(category.name) }
+                        .border(0.5.dp, Color.White.copy(0.05f), RoundedCornerShape(20.dp))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(PhylaxGreen.copy(0.1f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(category.icon, null, tint = PhylaxGreen, modifier = Modifier.size(24.dp))
+                        }
+                        Spacer(Modifier.width(16.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(category.name, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                            Text(category.count, color = PhylaxGray, fontSize = 12.sp)
+                        }
+                        Text(category.size, color = PhylaxGreen, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        Spacer(Modifier.width(8.dp))
+                        if (isDeletable) {
+                            IconButton(onClick = { onDeleteCategory(category.name) }) {
+                                Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color.Red.copy(alpha = 0.7f))
+                            }
+                        } else {
+                            Icon(Icons.Default.ChevronRight, null, tint = PhylaxGray, modifier = Modifier.size(20.dp))
                         }
                     }
                 }
@@ -626,7 +874,10 @@ fun SectionHeader(title: String, onSeeAllClick: () -> Unit) {
                 color = PhylaxGreen,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Medium,
-                modifier = Modifier.clickable { onSeeAllClick() }
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable { onSeeAllClick() }
+                    .padding(horizontal = 8.dp, vertical = 4.dp)
             )
         }
     }
@@ -653,7 +904,10 @@ fun NavigationItem(label: String, icon: ImageVector, selected: Boolean, onClick:
 }
 
 @Composable
-fun StorageOverviewCard(storage: StorageInfo?) {
+fun StorageOverviewCard(
+    storage: StorageInfo?,
+    onClick: () -> Unit
+) {
     val used = storage?.usedSpace ?: 0L
     val total = storage?.totalSpace ?: 1L
     val percent = used.toFloat() / total.toFloat()
@@ -666,6 +920,7 @@ fun StorageOverviewCard(storage: StorageInfo?) {
                 shape = SquaricleShape,
                 spotColor = PhylaxGreen
             )
+            .clickable { onClick() }
             .border(
                 1.5.dp,
                 Brush.linearGradient(listOf(PhylaxGreen.copy(0.4f), Color.Transparent)),
@@ -727,7 +982,12 @@ fun StorageOverviewCard(storage: StorageInfo?) {
 }
 
 @Composable
-fun CategoryCard(category: CategoryData, onClick: () -> Unit) {
+fun CategoryCard(
+    category: CategoryData,
+    isDeletable: Boolean = false,
+    onClick: () -> Unit,
+    onDelete: () -> Unit = {}
+) {
     val infiniteTransition = rememberInfiniteTransition(label = "breathing")
     val alpha by infiniteTransition.animateFloat(
         initialValue = 0.1f,
@@ -739,66 +999,86 @@ fun CategoryCard(category: CategoryData, onClick: () -> Unit) {
         label = "alpha"
     )
 
-    Card(
-        modifier = Modifier
-            .aspectRatio(0.9f)
-            .shadow(8.dp, SquaricleShape)
-            .clickable { onClick() }
-            .border(0.5.dp, Color.White.copy(0.05f), SquaricleShape),
-        colors = CardDefaults.cardColors(containerColor = PhylaxCardBg),
-        shape = SquaricleShape
-    ) {
-        Column(
+    Box(modifier = Modifier.fillMaxSize()) {
+        Card(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(20.dp),
-            verticalArrangement = Arrangement.SpaceBetween
+                .aspectRatio(0.9f)
+                .shadow(8.dp, SquaricleShape)
+                .clickable { onClick() }
+                .border(0.5.dp, Color.White.copy(0.05f), SquaricleShape),
+            colors = CardDefaults.cardColors(containerColor = PhylaxCardBg),
+            shape = SquaricleShape
         ) {
-            Box(
+            Column(
                 modifier = Modifier
-                    .size(48.dp)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(PhylaxGreen.copy(alpha = alpha))
-                    .border(1.dp, PhylaxGreen.copy(0.2f), RoundedCornerShape(14.dp)),
-                contentAlignment = Alignment.Center
+                    .fillMaxSize()
+                    .padding(20.dp),
+                verticalArrangement = Arrangement.SpaceBetween
             ) {
-                Icon(
-                    category.icon,
-                    contentDescription = null,
-                    tint = PhylaxGreen,
-                    modifier = Modifier.size(24.dp)
-                )
-            }
-
-            Column {
-                Text(
-                    category.name,
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        category.count,
-                        color = PhylaxGray,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                    Text(
-                        " • ",
-                        color = PhylaxGray,
-                        fontSize = 11.sp
-                    )
-                    Text(
-                        category.size,
-                        color = PhylaxGreen,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(PhylaxGreen.copy(alpha = alpha))
+                        .border(1.dp, PhylaxGreen.copy(0.2f), RoundedCornerShape(14.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        category.icon,
+                        contentDescription = null,
+                        tint = PhylaxGreen,
+                        modifier = Modifier.size(24.dp)
                     )
                 }
+
+                Column {
+                    Text(
+                        category.name,
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            category.count,
+                            color = PhylaxGray,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Text(
+                            " • ",
+                            color = PhylaxGray,
+                            fontSize = 11.sp
+                        )
+                        Text(
+                            category.size,
+                            color = PhylaxGreen,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+        }
+        
+        if (isDeletable) {
+            IconButton(
+                onClick = onDelete,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(8.dp)
+                    .size(24.dp)
+                    .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+            ) {
+                Icon(
+                    Icons.Default.Close,
+                    contentDescription = "Delete",
+                    tint = Color.Red.copy(alpha = 0.8f),
+                    modifier = Modifier.size(16.dp)
+                )
             }
         }
     }
